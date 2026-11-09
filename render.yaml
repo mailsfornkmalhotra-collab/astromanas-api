@@ -1,0 +1,22 @@
+# Render.com blueprint (free plan). New > Blueprint > pick this repo. Secret values are entered in the dashboard.
+services:
+  - type: web
+    name: astromanas-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: REVENUECAT_SECRET_KEY
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: DAILY_AI_CALL_LIMIT
+        value: "4000"
+      - key: LATEST_VERSION
+        value: "1.0.0"
+      - key: MIN_VERSION
+        value: "1.0.0"
