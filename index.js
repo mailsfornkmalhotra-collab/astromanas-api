@@ -289,6 +289,51 @@ ${context}
   }
 });
 
+// ---------- Daily horoscope ----------
+// Inputs are only small indices (natal Moon sign/nakshatra + today's transit), so the
+// number of distinct readings per day is tiny and almost every request is a cache hit.
+const SIGNS = ["Aries (Mesha)", "Taurus (Vrishabha)", "Gemini (Mithuna)", "Cancer (Karka)", "Leo (Simha)", "Virgo (Kanya)", "Libra (Tula)", "Scorpio (Vrishchika)", "Sagittarius (Dhanu)", "Capricorn (Makara)", "Aquarius (Kumbha)", "Pisces (Meena)"];
+const NAKS = ["Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra", "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni", "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha", "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"];
+const TARAS = ["Janma", "Sampat", "Vipat", "Kshema", "Pratyari", "Sadhana", "Vadha", "Mitra", "Param Mitra"];
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const int = (x, lo, hi) => Number.isInteger(x) && x >= lo && x <= hi;
+
+app.post("/api/daily", limiter(10, 60 * 1000), async (req, res) => {
+  try {
+    const { sign, nak, moon, tnak, vara, date, lang = "en" } = req.body || {};
+    if (!int(sign, 0, 11) || !int(moon, 0, 11) || !int(nak, 0, 26) || !int(tnak, 0, 26) || !int(vara, 0, 6) ||
+        typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !LANG[lang])
+      return res.status(400).json({ error: "bad_request" });
+    const house = ((moon - sign + 12) % 12) + 1;
+    const tara = (((tnak - nak + 27) % 27) % 9) + 1;
+    const context = `Date: ${date} (${DAYS[vara]})
+Natal Moon sign (rashi): ${SIGNS[sign]}; birth nakshatra: ${NAKS[nak]}
+Today's Moon: ${SIGNS[moon]} in ${NAKS[tnak]} nakshatra
+Chandra Bala: transit Moon in house ${house} from natal Moon (${[1, 3, 6, 7, 10, 11].includes(house) ? "favourable" : "less favourable"})
+Tara Bala: ${TARAS[tara - 1]} tara (${[2, 4, 6, 8, 9].includes(tara) ? "favourable" : [3, 5, 7].includes(tara) ? "challenging" : "neutral"})`;
+    const text = await cached("d:" + sha({ context, lang }), () =>
+      gemini({
+        system: `You write the daily personal horoscope in a Vedic astrology app, in ${LANG[lang]}.
+Using ONLY the data given, write a reading for today with exactly these four short labelled lines, each 1-2 sentences:
+Overall: ...
+Work & money: ...
+Love & family: ...
+Tip: ... (one practical, kind suggestion; may mention a simple traditional remedy such as a mantra or charity suited to the day)
+Translate the labels into the output language. Base the tone on Chandra Bala and Tara Bala. Positive, balanced, non-fatalistic. No medical/legal/financial advice, no predictions of death, illness or accidents. Plain text, no markdown.
+
+--- DATA ---
+${context}
+--- END ---`,
+        parts: [{ text: "Write today's reading." }],
+        temperature: 0.4,
+      })
+    );
+    res.json({ text: text.trim() });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 // ---------- Kundli ----------
 app.post("/api/kundli", limiter(15, 60 * 1000), (req, res) => {
   try {
